@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PhishLens</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+:root {
+  --bg:#ffffff;
+  --fg:#111;
+  --card:#f3f3f3;
+  --border:#ccc;
+  --link:#0969da;
+}
+.dark {
+  --bg:#0d1117;
+  --fg:#e6edf3;
+  --card:#161b22;
+  --border:#30363d;
+  --link:#58a6ff;
+}
+body {
+  background:var(--bg);
+  color:var(--fg);
+  font-family:system-ui, -apple-system, BlinkMacSystemFont;
+  max-width:1100px;
+  margin:30px auto;
+  padding:0 15px;
+}
+textarea,input {
+  width:100%;
+  background:var(--card);
+  color:var(--fg);
+  border:1px solid var(--border);
+  border-radius:6px;
+  padding:10px;
+  font-family:monospace;
+}
+button {
+  background:#238636;
+  color:#fff;
+  border:none;
+  padding:8px 14px;
+  border-radius:6px;
+  margin-top:10px;
+  cursor:pointer;
+}
+.card {
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:15px;
+  margin-top:20px;
+}
+.HIGH { color:#ff7b72; font-weight:bold; }
+.MEDIUM { color:#f2cc60; font-weight:bold; }
+.LOW { color:#3fb950; font-weight:bold; }
+a { color:var(--link); text-decoration:none; }
+.grid {
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:8px;
+}
+pre {
+  background:#00000022;
+  padding:10px;
+  border-radius:6px;
+  overflow-x:auto;
+}
+</style>
+</head>
+
+<body>
+
+<h1>🧪 PhishLens</h1>
+<p><i>See through phishing emails.</i></p>
+
+<button onclick="toggleDark()">🌙 Toggle Dark Mode</button>
+
+<div class="card">
+<h3>Paste Email Headers</h3>
+<textarea id="headers" rows="8" placeholder="Paste raw email headers here..."></textarea>
+<button onclick="analyze()">Analyze</button>
+</div>
+
+<div class="card">
+<h3>Upload .eml File</h3>
+<input type="file" id="eml" accept=".eml">
+</div>
+
+<div id="result"></div>
+
+<script>
+const BRANDS = {
+  microsoft:["microsoft","outlook","office","office365","teams"],
+  google:["google","gmail"],
+  apple:["apple","icloud","appleid"],
+  paypal:["paypal","pay pal"],
+  amazon:["amazon","prime"],
+  meta:["facebook","instagram","meta"],
+  dhl:["dhl"],
+  fedex:["fedex"],
+  ups:["ups"],
+  binance:["binance"],
+  coinbase:["coinbase"]
+};
+
+function toggleDark(){
+  document.body.classList.toggle("dark");
+  localStorage.setItem("dark",document.body.classList.contains("dark"));
+}
+if(localStorage.getItem("dark")==="true"){
+  document.body.classList.add("dark");
+}
+
+document.getElementById("eml").addEventListener("change",e=>{
+  const r=new FileReader();
+  r.onload=()=>{
+    headers.value=r.result.split(/\r?\n\r?\n/)[0];
+    analyze();
+  };
+  r.readAsText(e.target.files[0]);
+});
+
+function parseHeaders(raw){
+  const out={}; let last="";
+  raw.split(/\r?\n/).forEach(l=>{
+    if(l.startsWith(" ")||l.startsWith("\t")){
+      if(last) out[last]+=" "+l.trim();
+    } else {
+      const i=l.indexOf(":");
+      if(i>0){
+        last=l.slice(0,i).toLowerCase();
+        out[last]=(out[last]||"")+l.slice(i+1).trim();
+      }
+    }
+  });
+  return out;
+}
+
+function extractIPs(text){
+  return [...new Set((text||"").match(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g)||[])];
+}
+
+function detectBrands(text){
+  const t=(text||"").toLowerCase();
+  const found=[];
+  for(const b in BRANDS){
+    if(BRANDS[b].some(k=>t.includes(k))) found.push(b);
+  }
+  return [...new Set(found)];
+}
+
+function analyze(){
+  const raw=headers.value.trim();
+  if(!raw) return;
+
+  const h=parseHeaders(raw);
+  const rec=h["received"]||"";
+  const ips=extractIPs(rec);
+  const ip=ips[ips.length-1];
+  const brands=detectBrands(raw);
+
+  let score=0, reasons=[];
+  if(brands.length){
+    score+=25;
+    reasons.push("Brand impersonation keywords detected");
+  }
+  if(/urgent|verify|password|login|account|suspend/i.test(h.subject||"")){
+    score+=15;
+    reasons.push("Urgent or security language in subject");
+  }
+
+  const level = score>=75?"HIGH":score>=45?"MEDIUM":"LOW";
+
+  const links = ip ? {
+    abuseipdb:`https://www.abuseipdb.com/check/${ip}`,
+    vt:`https://www.virustotal.com/gui/ip-address/${ip}`,
+    greynoise:`https://viz.greynoise.io/ip/${ip}`,
+    shodan:`https://www.shodan.io/host/${ip}`,
+    censys:`https://search.censys.io/hosts/${ip}`,
+    otx:`https://otx.alienvault.com/indicator/ip/${ip}`,
+    ipinfo:`https://ipinfo.io/${ip}`,
+    talos:`https://talosintelligence.com/reputation_center/lookup?search=${ip}`
+  } : null;
+
+  result.innerHTML = `
+  <div class="card">
+    <h2>Verdict</h2>
+    Score: <b>${score}/100</b><br>
+    Risk: <span class="${level}">${level}</span>
+    <ul>${reasons.map(r=>`<li>${r}</li>`).join("")}</ul>
+  </div>
+
+  <div class="card">
+    <h2>Brand Detection</h2>
+    ${brands.length ? `Detected: <b>${brands.join(", ")}</b>` : "No brand indicators detected"}
+  </div>
+
+  <div class="card">
+    <h2>Threat Intelligence (Sender IP)</h2>
+    ${links ? `
+    <div class="grid">
+      <a href="${links.abuseipdb}" target="_blank">AbuseIPDB</a>
+      <a href="${links.vt}" target="_blank">VirusTotal</a>
+      <a href="${links.greynoise}" target="_blank">GreyNoise</a>
+      <a href="${links.shodan}" target="_blank">Shodan</a>
+      <a href="${links.censys}" target="_blank">Censys</a>
+      <a href="${links.otx}" target="_blank">AlienVault OTX</a>
+      <a href="${links.ipinfo}" target="_blank">IPinfo</a>
+      <a href="${links.talos}" target="_blank">Cisco Talos</a>
+    </div>` : "No sender IP found"}
+  </div>
+
+  <div class="card">
+    <h2>Received Headers</h2>
+    <pre>${rec || "None found"}</pre>
+  </div>
+  `;
+}
+</script>
+
+</body>
+</html>
