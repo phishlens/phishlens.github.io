@@ -29,12 +29,21 @@ cybersecurity tools
 <meta property="og:image" content="https://phishlens.github.io/social-preview.png">
 <meta name="twitter:card" content="summary_large_image">
 
-
-
 <link rel="icon" href="favicon.ico">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
+/* FIX overflow + file input sizing */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+input[type="file"] {
+  width: 100%;
+  max-width: 100%;
+}
+
+/* THEME */
 :root {
   --bg:#ffffff;
   --fg:#111;
@@ -132,20 +141,24 @@ pre {
 
 .dark #darkToggle { background:#222; }
 
+/* TABLE */
 table {
   width:100%;
   border-collapse:collapse;
   font-size:0.9em;
 }
+
 th, td {
   border:1px solid var(--border);
   padding:6px 8px;
   vertical-align:top;
 }
+
 th {
   background:#00000022;
   text-align:left;
 }
+
 td code { word-break:break-all; }
 
 .suspicious {
