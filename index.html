@@ -69,6 +69,11 @@ button {
   cursor:pointer;
 }
 
+button:disabled {
+  opacity:0.7;
+  cursor:not-allowed;
+}
+
 .card {
   background:var(--card);
   border:1px solid var(--border);
@@ -133,8 +138,8 @@ pre {
 <h3>Paste Email Headers</h3>
 <textarea id="headers" rows="8" placeholder="Paste raw email headers here..."></textarea>
 
-<button onclick="analyze()">Analyze</button>
-<button onclick="loadExample()" style="margin-left:10px;background:#555;">
+<button onclick="analyze(this)">Analyze</button>
+<button onclick="loadExample()" style="margin-left:10px;background:#666;font-size:0.9em;">
   Load example phishing headers
 </button>
 
@@ -237,9 +242,20 @@ function detectBrands(text){
   return Object.keys(BRANDS).filter(b=>BRANDS[b].some(k=>t.includes(k)));
 }
 
-function analyze(){
+function analyze(btn){
+  if(btn){
+    btn.disabled=true;
+    btn.textContent="Analyzing…";
+  }
+
   const raw=headers.value.trim();
-  if(!raw) return;
+  if(!raw){
+    if(btn){
+      btn.textContent="Analyze";
+      btn.disabled=false;
+    }
+    return;
+  }
 
   const h=parseHeaders(raw);
   const rec=h["received"]||"";
@@ -248,9 +264,13 @@ function analyze(){
   const brands=detectBrands(raw);
 
   let score=0,reasons=[];
-  if(brands.length){score+=25;reasons.push("Brand impersonation keywords detected");}
+  if(brands.length){
+    score+=25;
+    reasons.push("Brand impersonation keywords detected");
+  }
   if(/urgent|verify|password|login|account|suspend/i.test(h.subject||"")){
-    score+=15;reasons.push("Urgent or security language in subject");
+    score+=15;
+    reasons.push("Urgent or security-related language detected");
   }
 
   const level=score>=75?"HIGH":score>=45?"MEDIUM":"LOW";
@@ -270,7 +290,10 @@ function analyze(){
   <div class="card">
     <h2>Verdict</h2>
     Score: <b>${score}/100</b><br>
-    Risk: <span class="${level}">${level}</span>
+    Risk:
+    <span class="${level}" style="padding:2px 8px;border-radius:4px;border:1px solid currentColor;">
+      ${level}
+    </span>
     <ul>${reasons.map(r=>`<li>${r}</li>`).join("")}</ul>
   </div>
 
@@ -300,6 +323,14 @@ function analyze(){
     <h2>Received Headers</h2>
     <pre>${rec||"None found"}</pre>
   </div>`;
+
+  document.getElementById("result")
+    .scrollIntoView({ behavior:"smooth" });
+
+  if(btn){
+    btn.textContent="Analyze";
+    btn.disabled=false;
+  }
 }
 </script>
 
