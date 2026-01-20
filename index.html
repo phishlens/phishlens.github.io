@@ -4,8 +4,9 @@
 <meta charset="utf-8">
 <title>PhishLens</title>
 
+<!-- Open Graph / Social Preview -->
 <meta property="og:title" content="PhishLens">
-<meta property="og:description" content="A browser-based email header analysis tool for phishing investigation.">
+<meta property="og:description" content="Browser-based email header analysis tool for phishing investigation.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://phishlens.github.io/">
 <meta property="og:image" content="https://phishlens.github.io/social-preview.png">
@@ -13,10 +14,7 @@
 <meta name="twitter:card" content="summary_large_image">
 
 <link rel="icon" href="favicon.ico">
-
 <meta name="viewport" content="width=device-width, initial-scale=1">
-
-
 
 <style>
 :root {
@@ -26,6 +24,7 @@
   --border:#ccc;
   --link:#0969da;
 }
+
 .dark {
   --bg:#0d1117;
   --fg:#e6edf3;
@@ -33,14 +32,23 @@
   --border:#30363d;
   --link:#58a6ff;
 }
+
 body {
   background:var(--bg);
   color:var(--fg);
-  font-family:system-ui, -apple-system, BlinkMacSystemFont;
+  font-family:system-ui,-apple-system,BlinkMacSystemFont;
   max-width:1100px;
   margin:30px auto;
   padding:0 15px;
 }
+
+body, .card, textarea, input, button {
+  transition:
+    background-color 0.25s ease,
+    color 0.25s ease,
+    border-color 0.25s ease;
+}
+
 textarea,input {
   width:100%;
   background:var(--card);
@@ -50,6 +58,7 @@ textarea,input {
   padding:10px;
   font-family:monospace;
 }
+
 button {
   background:#238636;
   color:#fff;
@@ -59,6 +68,7 @@ button {
   margin-top:10px;
   cursor:pointer;
 }
+
 .card {
   background:var(--card);
   border:1px solid var(--border);
@@ -66,41 +76,71 @@ button {
   padding:15px;
   margin-top:20px;
 }
+
 .HIGH { color:#ff7b72; font-weight:bold; }
 .MEDIUM { color:#f2cc60; font-weight:bold; }
 .LOW { color:#3fb950; font-weight:bold; }
-a { color:var(--link); text-decoration:none; }
+
+a {
+  color:var(--link);
+  text-decoration:none;
+}
+
 .grid {
   display:grid;
   grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
   gap:8px;
 }
+
 pre {
   background:#00000022;
   padding:10px;
   border-radius:6px;
   overflow-x:auto;
 }
+
+#darkToggle {
+  position:fixed;
+  top:16px;
+  right:16px;
+  background:#444;
+  color:#fff;
+  border-radius:6px;
+  padding:6px 10px;
+  cursor:pointer;
+  z-index:1000;
+}
+
+.dark #darkToggle {
+  background:#222;
+}
 </style>
 </head>
 
 <body>
 
-<div style="display:flex;align-items:center;gap:15px;margin-bottom:12px;">
-  <img src="Phishlens.png" alt="PhishLens logo"
-       style="height:64px;width:auto;">
+<button id="darkToggle" onclick="toggleDark()">🌙</button>
+
+<div style="display:flex;align-items:center;gap:15px;margin-bottom:10px;">
+  <img src="phishlens.png" alt="PhishLens logo" style="height:64px;width:auto;">
   <div>
     <h1 style="margin:0;">PhishLens</h1>
     <p style="margin:0;"><i>See through phishing emails.</i></p>
   </div>
 </div>
 
-<button onclick="toggleDark()">🌙 Toggle Dark Mode</button>
-
 <div class="card">
 <h3>Paste Email Headers</h3>
 <textarea id="headers" rows="8" placeholder="Paste raw email headers here..."></textarea>
+
 <button onclick="analyze()">Analyze</button>
+<button onclick="loadExample()" style="margin-left:10px;background:#555;">
+  Load example phishing headers
+</button>
+
+<p style="font-size:0.85em;color:gray;margin-top:6px;">
+Example headers are synthetic and provided for demonstration purposes.
+</p>
 </div>
 
 <div class="card">
@@ -109,6 +149,10 @@ pre {
 </div>
 
 <div id="result"></div>
+
+<p style="margin-top:40px;font-size:0.9em;color:gray;">
+All analysis is performed locally in your browser. No data is transmitted.
+</p>
 
 <script>
 const BRANDS = {
@@ -125,13 +169,30 @@ const BRANDS = {
   coinbase:["coinbase"]
 };
 
+function applyTheme(isDark){
+  document.body.classList.toggle("dark",isDark);
+  localStorage.setItem("dark",isDark);
+}
+
 function toggleDark(){
-  document.body.classList.toggle("dark");
-  localStorage.setItem("dark",document.body.classList.contains("dark"));
+  applyTheme(!document.body.classList.contains("dark"));
 }
-if(localStorage.getItem("dark")==="true"){
-  document.body.classList.add("dark");
-}
+
+(function initTheme(){
+  const saved=localStorage.getItem("dark");
+  if(saved!==null){
+    applyTheme(saved==="true");
+  }else{
+    applyTheme(window.matchMedia("(prefers-color-scheme: dark)").matches);
+  }
+})();
+
+window.matchMedia("(prefers-color-scheme: dark)")
+  .addEventListener("change",e=>{
+    if(localStorage.getItem("dark")===null){
+      applyTheme(e.matches);
+    }
+  });
 
 document.getElementById("eml").addEventListener("change",e=>{
   const r=new FileReader();
@@ -142,12 +203,21 @@ document.getElementById("eml").addEventListener("change",e=>{
   r.readAsText(e.target.files[0]);
 });
 
+function loadExample(){
+  headers.value=`From: PayPal Security <alert@paypaI-support.com>
+Subject: Urgent – Verify your account
+Received: from mail.paypaI-support.com (185.222.56.23)
+ by mx.example.com with ESMTP id ABC123
+Date: Tue, 12 Mar 2024 10:22:41 +0000`;
+  analyze();
+}
+
 function parseHeaders(raw){
   const out={}; let last="";
   raw.split(/\r?\n/).forEach(l=>{
     if(l.startsWith(" ")||l.startsWith("\t")){
       if(last) out[last]+=" "+l.trim();
-    } else {
+    }else{
       const i=l.indexOf(":");
       if(i>0){
         last=l.slice(0,i).toLowerCase();
@@ -164,11 +234,7 @@ function extractIPs(text){
 
 function detectBrands(text){
   const t=(text||"").toLowerCase();
-  const found=[];
-  for(const b in BRANDS){
-    if(BRANDS[b].some(k=>t.includes(k))) found.push(b);
-  }
-  return [...new Set(found)];
+  return Object.keys(BRANDS).filter(b=>BRANDS[b].some(k=>t.includes(k)));
 }
 
 function analyze(){
@@ -181,19 +247,15 @@ function analyze(){
   const ip=ips[ips.length-1];
   const brands=detectBrands(raw);
 
-  let score=0, reasons=[];
-  if(brands.length){
-    score+=25;
-    reasons.push("Brand impersonation keywords detected");
-  }
+  let score=0,reasons=[];
+  if(brands.length){score+=25;reasons.push("Brand impersonation keywords detected");}
   if(/urgent|verify|password|login|account|suspend/i.test(h.subject||"")){
-    score+=15;
-    reasons.push("Urgent or security language in subject");
+    score+=15;reasons.push("Urgent or security language in subject");
   }
 
-  const level = score>=75?"HIGH":score>=45?"MEDIUM":"LOW";
+  const level=score>=75?"HIGH":score>=45?"MEDIUM":"LOW";
 
-  const links = ip ? {
+  const links=ip?{
     abuseipdb:`https://www.abuseipdb.com/check/${ip}`,
     vt:`https://www.virustotal.com/gui/ip-address/${ip}`,
     greynoise:`https://viz.greynoise.io/ip/${ip}`,
@@ -202,9 +264,9 @@ function analyze(){
     otx:`https://otx.alienvault.com/indicator/ip/${ip}`,
     ipinfo:`https://ipinfo.io/${ip}`,
     talos:`https://talosintelligence.com/reputation_center/lookup?search=${ip}`
-  } : null;
+  }:null;
 
-  result.innerHTML = `
+  result.innerHTML=`
   <div class="card">
     <h2>Verdict</h2>
     Score: <b>${score}/100</b><br>
@@ -212,19 +274,17 @@ function analyze(){
     <ul>${reasons.map(r=>`<li>${r}</li>`).join("")}</ul>
   </div>
 
-<div class="card">
-  <h2>Brand Detection</h2>
-  ${brands.length ? `Detected: <b>${brands.join(", ")}</b>` : "No brand indicators detected"}
-  <p style="margin-top:8px;font-size:0.9em;color:gray;">
-    Brand detection is based on keyword matching and does not guarantee affiliation.
-  </p>
-</div>
-
+  <div class="card">
+    <h2>Brand Detection</h2>
+    ${brands.length?`Detected: <b>${brands.join(", ")}</b>`:"No brand indicators detected"}
+    <p style="margin-top:8px;font-size:0.9em;color:gray;">
+      Brand detection is based on keyword matching and does not guarantee affiliation.
+    </p>
+  </div>
 
   <div class="card">
     <h2>Threat Intelligence (Sender IP)</h2>
-    ${links ? `
-    <div class="grid">
+    ${links?`<div class="grid">
       <a href="${links.abuseipdb}" target="_blank">AbuseIPDB</a>
       <a href="${links.vt}" target="_blank">VirusTotal</a>
       <a href="${links.greynoise}" target="_blank">GreyNoise</a>
@@ -233,19 +293,15 @@ function analyze(){
       <a href="${links.otx}" target="_blank">AlienVault OTX</a>
       <a href="${links.ipinfo}" target="_blank">IPinfo</a>
       <a href="${links.talos}" target="_blank">Cisco Talos</a>
-    </div>` : "No sender IP found"}
+    </div>`:"No sender IP found"}
   </div>
 
   <div class="card">
     <h2>Received Headers</h2>
-    <pre>${rec || "None found"}</pre>
-  </div>
-  `;
+    <pre>${rec||"None found"}</pre>
+  </div>`;
 }
 </script>
-<p style="margin-top:40px;font-size:0.9em;color:gray;">
-All analysis is performed locally in your browser. No data is transmitted.
-</p>
 
 </body>
 </html>
