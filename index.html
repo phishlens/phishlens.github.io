@@ -212,10 +212,14 @@ function analyze(){
     <ul>${reasons.map(r=>`<li>${r}</li>`).join("")}</ul>
   </div>
 
-  <div class="card">
-    <h2>Brand Detection</h2>
-    ${brands.length ? `Detected: <b>${brands.join(", ")}</b>` : "No brand indicators detected"}
-  </div>
+<div class="card">
+  <h2>Brand Detection</h2>
+  ${brands.length ? `Detected: <b>${brands.join(", ")}</b>` : "No brand indicators detected"}
+  <p style="margin-top:8px;font-size:0.9em;color:gray;">
+    Brand detection is based on keyword matching and does not guarantee affiliation.
+  </p>
+</div>
+
 
   <div class="card">
     <h2>Threat Intelligence (Sender IP)</h2>
@@ -239,6 +243,9 @@ function analyze(){
   `;
 }
 </script>
+<p style="margin-top:40px;font-size:0.9em;color:gray;">
+All analysis is performed locally in your browser. No data is transmitted.
+</p>
 
 </body>
 </html>
