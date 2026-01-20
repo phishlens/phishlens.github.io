@@ -10,7 +10,6 @@
 
 # PhishLens
 
-# PhishLens
 
 PhishLens is a lightweight, browser-based email header analysis tool built to help security analysts, blue teams, and researchers quickly triage potential phishing emails.
 
@@ -82,3 +81,40 @@ PhishLens is optimized for rapid triage rather than deep forensic reconstruction
 - Results should not be used as the sole basis for security decisions  
 
 PhishLens works best when combined with additional context such as SIEM alerts, user reports, sandboxing, and endpoint telemetry.
+
+## Technology
+
+- HTML, CSS, JavaScript  
+- GitHub Pages for hosting  
+- No frameworks  
+- No backend services  
+
+---
+
+## License
+
+MIT License.
+
+This project is provided as-is for research, learning, and defensive security purposes.
+
+---
+
+## Contributing
+
+Suggestions and improvements are welcome.
+
+Potential areas for enhancement include:
+- Improved look-alike and homoglyph domain detection  
+- Better visualization of the Received header chain  
+- Export functionality (PDF or JSON)  
+- Expanded brand impersonation profiles  
+- UI and usability refinements  
+
+Issues and pull requests are encouraged.
+
+---
+
+## Project Status
+
+The project is stable and publicly available.  
+It is actively usable and open for future improvements.
