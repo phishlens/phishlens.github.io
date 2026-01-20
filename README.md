@@ -1,4 +1,6 @@
-# phishlens.github.io
+<p align="center">
+  <img src="Phishlens.png" alt="PhishLens logo" width="160">
+</p>
 # PhishLens
 
 PhishLens is a lightweight, browser-based email header analysis tool built to help security analysts, blue teams, and researchers quickly triage potential phishing emails.
