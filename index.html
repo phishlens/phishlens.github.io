@@ -787,12 +787,6 @@ function renderAttachmentResults(attachments) {
     <div class="card">
       <h2>Attachments</h2>
       <p class="small">Hashes are computed locally. Downloads are saved as password-protected ZIP files using password: <code>infected</code>.</p>
-      <p class="small">IOC export is available only for attachments extracted from uploaded <code>.eml</code> files.</p>
-
-      <div class="row" style="margin-top:10px;">
-        <button onclick="exportAttachmentIocsJson()">Export IOCs (JSON)</button>
-        <button onclick="exportAttachmentIocsCsv()">Export IOCs (CSV)</button>
-      </div>
 
       ${attachments.map((att, i) => `
         <div class="attachment-card">
@@ -853,107 +847,6 @@ async function downloadProtectedZip(att) {
 function downloadProtectedAttachment(i) {
   const att = currentAttachmentCache[i];
   if (att) downloadProtectedZip(att);
-}
-
-function buildAttachmentIocRecords() {
-  if (!currentAttachmentCache || !currentAttachmentCache.length) return [];
-
-  return currentAttachmentCache.map(att => ({
-    type: "attachment",
-    source: "uploaded_eml",
-    filename: att.filename || "",
-    mime_type: att.mimeType || "",
-    size_bytes: att.size || 0,
-    sha256: att.sha256 || "",
-    risk_reasons: att.risk?.reasons || [],
-    virustotal_url: att.vtUrl || "",
-    extracted_at: new Date().toISOString()
-  }));
-}
-
-function downloadTextFile(filename, content, mimeType) {
-  const blob = new Blob([content], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-function exportAttachmentIocsJson() {
-  const records = buildAttachmentIocRecords();
-
-  if (!records.length) {
-    alert("No attachment IOCs available. Upload a full .eml file first.");
-    return;
-  }
-
-  const payload = {
-    tool: "PhishLens",
-    export_type: "attachment_iocs",
-    note: "Attachment IOC export only works when a full .eml file is uploaded. Header-only analysis does not include attachment IOCs.",
-    generated_at: new Date().toISOString(),
-    count: records.length,
-    records
-  };
-
-  downloadTextFile(
-    `phishlens_iocs_${new Date().toISOString().replace(/[:.]/g, "-")}.json`,
-    JSON.stringify(payload, null, 2),
-    "application/json"
-  );
-}
-
-function csvEscape(value) {
-  const str = Array.isArray(value) ? value.join(" | ") : String(value ?? "");
-  return `"${str.replace(/"/g, '""')}"`;
-}
-
-function exportAttachmentIocsCsv() {
-  const records = buildAttachmentIocRecords();
-
-  if (!records.length) {
-    alert("No attachment IOCs available. Upload a full .eml file first.");
-    return;
-  }
-
-  const headers = [
-    "type",
-    "source",
-    "filename",
-    "mime_type",
-    "size_bytes",
-    "sha256",
-    "risk_reasons",
-    "virustotal_url",
-    "extracted_at"
-  ];
-
-  const rows = [
-    headers.join(","),
-    ...records.map(r => [
-      csvEscape(r.type),
-      csvEscape(r.source),
-      csvEscape(r.filename),
-      csvEscape(r.mime_type),
-      csvEscape(r.size_bytes),
-      csvEscape(r.sha256),
-      csvEscape(r.risk_reasons),
-      csvEscape(r.virustotal_url),
-      csvEscape(r.extracted_at)
-    ].join(","))
-  ];
-
-  downloadTextFile(
-    `phishlens_iocs_${new Date().toISOString().replace(/[:.]/g, "-")}.csv`,
-    rows.join("\n"),
-    "text/csv;charset=utf-8"
-  );
 }
 
 async function analyze(btn, rawEmlOverride = "") {
