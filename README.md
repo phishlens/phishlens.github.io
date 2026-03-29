@@ -56,40 +56,7 @@ For each attachment, PhishLens shows:
 - MIME type
 - File size
 - SHA-256 hash
-- Risk level
-- Risk reasons
 - VirusTotal lookup link
-
-------------------------------------------------------------
-
-ATTACHMENT RISK CHECKS
-
-PhishLens flags:
-
-- Suspicious extensions:
-  .exe, .js, .vbs, .bat, .cmd, .ps1, .hta, .iso, .img, .lnk
-
-- Archive formats:
-  .zip, .rar, .7z
-
-- Double extensions:
-  invoice.pdf.exe
-
-- Suspicious MIME types
-- Empty (0-byte) files
-
-------------------------------------------------------------
-
-ARCHIVE INSPECTION
-
-For ZIP attachments:
-
-- Lists files inside the archive
-- Detects suspicious files inside ZIP
-- Detects double extensions inside ZIP
-- Flags encrypted entries
-- Detects password-protected archives
-- Performs limited nested ZIP inspection
 
 ------------------------------------------------------------
 
@@ -100,9 +67,7 @@ Attachments are NOT downloaded raw.
 They are automatically:
 
 - Packaged into a ZIP file
-- Protected with password:
-
-  infected
+- Protected with password: infected
 
 This follows standard malware analysis practice and helps prevent accidental execution.
 
