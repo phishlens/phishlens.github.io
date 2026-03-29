@@ -4,26 +4,11 @@
 <meta charset="utf-8">
 <title>PhishLens – Email Header Analysis & Phishing Detection Tool</title>
 
-<meta name="description" content="PhishLens is a browser-based email header analysis tool for phishing detection, threat intelligence lookups, and security investigations.">
-
-<meta name="keywords" content="
-phishing analysis,
-email header analysis,
-phishing detection,
-email forensics,
-threat intelligence,
-AbuseIPDB,
-VirusTotal,
-email security,
-phishing investigation,
-SOC tools,
-incident response,
-blue team,
-cybersecurity tools
-">
+<meta name="description" content="PhishLens is a browser-based email header analysis tool for phishing detection, threat intelligence lookups, attachment extraction, and security investigations.">
+<meta name="keywords" content="phishing analysis,email header analysis,phishing detection,email forensics,attachment extraction,email attachment analysis,threat intelligence,AbuseIPDB,VirusTotal,email security,phishing investigation,SOC tools,incident response,blue team,cybersecurity tools">
 
 <meta property="og:title" content="PhishLens – Email Header Analysis Tool">
-<meta property="og:description" content="Analyze email headers for phishing indicators, brand impersonation, and sender IP reputation using client-side threat intelligence links.">
+<meta property="og:description" content="Analyze email headers, inspect attachments, and investigate phishing indicators locally in your browser.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://phishlens.github.io/">
 <meta property="og:image" content="https://phishlens.github.io/social-preview.png">
@@ -32,8 +17,9 @@ cybersecurity tools
 <link rel="icon" href="favicon.ico">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
+<script src="https://cdn.jsdelivr.net/npm/@zip.js/zip.js@2.7.57/dist/zip-full.min.js"></script>
+
 <style>
-/* FIX overflow + file input sizing */
 *, *::before, *::after {
   box-sizing: border-box;
 }
@@ -43,7 +29,6 @@ input[type="file"] {
   max-width: 100%;
 }
 
-/* THEME */
 :root {
   --bg:#ffffff;
   --fg:#111;
@@ -51,6 +36,10 @@ input[type="file"] {
   --border:#ccc;
   --link:#0969da;
   --warn:#b45309;
+  --muted:#666;
+  --good:#3fb950;
+  --med:#f2cc60;
+  --high:#ff7b72;
 }
 
 .dark {
@@ -60,22 +49,26 @@ input[type="file"] {
   --border:#30363d;
   --link:#58a6ff;
   --warn:#f59e0b;
+  --muted:#9aa4af;
+  --good:#3fb950;
+  --med:#f2cc60;
+  --high:#ff7b72;
 }
 
 body {
   background:var(--bg);
   color:var(--fg);
-  font-family:system-ui,-apple-system,BlinkMacSystemFont;
+  font-family:system-ui,-apple-system,BlinkMacSystemFont,sans-serif;
   max-width:1100px;
   margin:30px auto;
   padding:0 15px;
 }
 
-body, .card, textarea, input, button, table {
+body, .card, textarea, input, button, table, details {
   transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
 }
 
-textarea,input {
+textarea, input {
   width:100%;
   background:var(--card);
   color:var(--fg);
@@ -95,6 +88,10 @@ button {
   cursor:pointer;
 }
 
+button.secondary {
+  background:#374151;
+}
+
 button:disabled {
   opacity:0.7;
   cursor:not-allowed;
@@ -108,11 +105,23 @@ button:disabled {
   margin-top:20px;
 }
 
-.HIGH { color:#ff7b72; font-weight:bold; }
-.MEDIUM { color:#f2cc60; font-weight:bold; }
-.LOW { color:#3fb950; font-weight:bold; }
+.HIGH { color:var(--high); font-weight:bold; }
+.MEDIUM { color:var(--med); font-weight:bold; }
+.LOW { color:var(--good); font-weight:bold; }
 
-a { color:var(--link); text-decoration:none; }
+.badge {
+  display:inline-block;
+  border:1px solid currentColor;
+  padding:2px 8px;
+  border-radius:999px;
+  font-size:0.85em;
+  font-weight:700;
+}
+
+a {
+  color:var(--link);
+  text-decoration:none;
+}
 
 .grid {
   display:grid;
@@ -141,7 +150,6 @@ pre {
 
 .dark #darkToggle { background:#222; }
 
-/* TABLE */
 table {
   width:100%;
   border-collapse:collapse;
@@ -159,7 +167,11 @@ th {
   text-align:left;
 }
 
-td code { word-break:break-all; }
+td code, .hash {
+  word-break:break-all;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:0.9em;
+}
 
 .suspicious {
   background:rgba(245,158,11,0.15);
@@ -171,6 +183,44 @@ details summary {
   cursor:pointer;
   font-weight:bold;
   margin-bottom:8px;
+}
+
+.attachment-card {
+  padding:14px;
+  border:1px solid var(--border);
+  border-radius:10px;
+  margin-top:12px;
+}
+
+.row {
+  display:flex;
+  gap:12px;
+  flex-wrap:wrap;
+  align-items:center;
+}
+
+.kv {
+  color:var(--muted);
+  font-size:0.92em;
+}
+
+.reason-list {
+  margin:8px 0 0 18px;
+}
+
+.small {
+  font-size:0.9em;
+  color:var(--muted);
+}
+
+.section-title {
+  margin-bottom:6px;
+}
+
+hr.sep {
+  border:none;
+  border-top:1px solid var(--border);
+  margin:16px 0;
 }
 </style>
 </head>
@@ -188,14 +238,16 @@ details summary {
 </div>
 
 <div class="card">
-<h3>Paste Email Headers</h3>
-<textarea id="headers" rows="8" placeholder="Paste raw email headers here..."></textarea>
-<button onclick="analyze(this)">Analyze</button>
+  <h3>Paste Email Headers</h3>
+  <textarea id="headers" rows="8" placeholder="Paste raw email headers here..."></textarea>
+  <button id="analyzeBtn" onclick="analyze(this)">Analyze</button>
 </div>
 
 <div class="card">
-<h3>Upload .eml File</h3>
-<input type="file" id="eml" accept=".eml">
+  <h3>Upload .eml File</h3>
+  <input type="file" id="eml" accept=".eml">
+  <p class="small">When you upload an .eml, PhishLens will analyze both headers and attachments locally in your browser.</p>
+  <p class="small">Attachments are downloaded as password-protected ZIP files (password: <code>infected</code>) for safety.</p>
 </div>
 
 <div id="result"></div>
@@ -226,6 +278,18 @@ const SUSPICIOUS_HEADERS = [
   "x-authentication-warning"
 ];
 
+const SUSPICIOUS_EXTENSIONS = new Set([
+  "exe","scr","js","jse","vbs","vbe","bat","cmd","ps1","psm1","hta",
+  "jar","msi","dll","com","pif","reg","chm","lnk","iso","img",
+  "html","htm","svg","zip","rar","7z","ace"
+]);
+
+const ARCHIVE_EXTENSIONS = new Set(["zip","rar","7z"]);
+const SAFEISH_EXTENSIONS = new Set(["pdf","doc","docx","xls","xlsx","ppt","pptx","txt","csv","png","jpg","jpeg","gif"]);
+
+let currentEmlText = "";
+let currentAttachmentCache = [];
+
 function applyTheme(d){
   document.body.classList.toggle("dark",d);
   localStorage.setItem("dark",d);
@@ -236,26 +300,54 @@ function toggleDark(){ applyTheme(!document.body.classList.contains("dark")); }
   applyTheme(s!==null?s==="true":matchMedia("(prefers-color-scheme: dark)").matches);
 })();
 
-document.getElementById("eml").addEventListener("change",e=>{
-  const r=new FileReader();
-  r.onload=()=>{ headers.value=r.result.split(/\r?\n\r?\n/)[0]; analyze(); };
-  r.readAsText(e.target.files[0]);
+document.getElementById("eml").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const raw = await file.text();
+  currentEmlText = raw;
+
+  const split = splitHeadersBody(raw);
+  document.getElementById("headers").value = split.headerText || "";
+  await analyze(document.getElementById("analyzeBtn"), raw);
 });
 
+function escapeHtml(str = "") {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 function parseHeaders(raw){
-  const o={},l=[];
+  const o={}, l=[];
   raw.split(/\r?\n/).forEach(x=>{
-    if(x.startsWith(" ")&&l.length) o[l[l.length-1]]+=" "+x.trim();
-    else {
-      const i=x.indexOf(":");
-      if(i>0){
-        const k=x.slice(0,i).toLowerCase();
-        o[k]=x.slice(i+1).trim();
+    if (/^\s/.test(x) && l.length) {
+      o[l[l.length-1]] += " " + x.trim();
+    } else {
+      const i = x.indexOf(":");
+      if (i > 0) {
+        const k = x.slice(0,i).toLowerCase();
+        o[k] = x.slice(i+1).trim();
         l.push(k);
       }
     }
   });
   return o;
+}
+
+function splitHeadersBody(raw) {
+  const match = raw.match(/\r?\n\r?\n/);
+  if (!match) {
+    return { headerText: raw, bodyText: "" };
+  }
+  const idx = match.index;
+  return {
+    headerText: raw.slice(0, idx),
+    bodyText: raw.slice(idx + match[0].length)
+  };
 }
 
 function renderOtherHeaders(h){
@@ -264,11 +356,11 @@ function renderOtherHeaders(h){
   const rows=Object.entries(h).filter(([k])=>!skip.includes(k)).map(([k,v])=>{
     const suspicious=SUSPICIOUS_HEADERS.some(s=>k.includes(s));
     return `<tr class="${suspicious?"suspicious":""}">
-      <td>${i++}</td><td>${k}</td><td><code>${v}</code></td>
+      <td>${i++}</td><td>${escapeHtml(k)}</td><td><code>${escapeHtml(v)}</code></td>
     </tr>`;
   }).join("");
 
-  return rows?`
+  return rows ? `
   <div class="card">
     <details>
       <summary>Other Headers (click to expand)</summary>
@@ -277,70 +369,596 @@ function renderOtherHeaders(h){
         <tbody>${rows}</tbody>
       </table>
     </details>
-  </div>`:"";
+  </div>` : "";
 }
 
-function analyze(btn){
-  if(btn){btn.disabled=true;btn.textContent="Analyzing…";}
-  const raw=headers.value.trim();
-  if(!raw){btn.textContent="Analyze";btn.disabled=false;return;}
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
 
-  const h=parseHeaders(raw);
-  const rec=h["received"]||"";
-  const ip=(rec.match(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g)||[]).pop();
+function getExt(filename = "") {
+  const clean = filename.trim().toLowerCase();
+  if (!clean.includes(".")) return "";
+  return clean.split(".").pop();
+}
 
-  const identity=[h.from,h["reply-to"],h["return-path"],h.subject].join(" ").toLowerCase();
-  const brands=Object.keys(BRANDS).filter(b=>BRANDS[b].some(k=>identity.includes(k)));
+function getDoubleExtension(filename = "") {
+  const parts = filename.toLowerCase().split(".").filter(Boolean);
+  if (parts.length < 3) return null;
+  return parts.slice(-2).join(".");
+}
 
-  let score=0,reasons=[];
-  if(brands.length){score+=25;reasons.push("Brand impersonation indicators detected");}
-  if(/urgent|verify|password|login|account|suspend/i.test(h.subject||"")){
-    score+=15;reasons.push("Urgent or security-related language detected");
+function base64ToBytes(base64) {
+  const clean = base64.replace(/\s/g, "");
+  const binary = atob(clean);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function decodeQuotedPrintable(input) {
+  return input
+    .replace(/=\r?\n/g, "")
+    .replace(/=([A-Fa-f0-9]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+}
+
+function textToBytes(text) {
+  return new TextEncoder().encode(text);
+}
+
+function decodeBodyByEncoding(bodyText, encoding = "") {
+  const enc = encoding.toLowerCase();
+  if (enc.includes("base64")) {
+    try { return base64ToBytes(bodyText); } catch { return textToBytes(bodyText); }
+  }
+  if (enc.includes("quoted-printable")) {
+    return textToBytes(decodeQuotedPrintable(bodyText));
+  }
+  return textToBytes(bodyText);
+}
+
+function getBoundary(contentType = "") {
+  const m = contentType.match(/boundary="?([^";]+)"?/i);
+  return m ? m[1] : null;
+}
+
+function getFilename(headers) {
+  const cd = headers["content-disposition"] || "";
+  const ct = headers["content-type"] || "";
+
+  let m = cd.match(/filename\*?="?([^";]+)"?/i);
+  if (m) return m[1].trim();
+
+  m = ct.match(/name\*?="?([^";]+)"?/i);
+  if (m) return m[1].trim();
+
+  return "";
+}
+
+function splitMultipartBody(bodyText, boundary) {
+  const boundaryText = "--" + boundary;
+  const endBoundaryText = boundaryText + "--";
+  const lines = bodyText.split(/\r?\n/);
+
+  const parts = [];
+  let current = [];
+  let inside = false;
+
+  for (const line of lines) {
+    if (line === boundaryText) {
+      if (inside && current.length) {
+        parts.push(current.join("\n"));
+        current = [];
+      }
+      inside = true;
+      continue;
+    }
+    if (line === endBoundaryText) {
+      if (inside && current.length) {
+        parts.push(current.join("\n"));
+      }
+      break;
+    }
+    if (inside) current.push(line);
   }
 
-  const level=score>=75?"HIGH":score>=45?"MEDIUM":"LOW";
+  return parts.map(p => p.trim()).filter(Boolean);
+}
 
-  const ti = ip ? `
-  <div class="card">
-    <h2>Threat Intelligence (Sender IP)</h2>
-    <div class="grid">
-      <a href="https://www.abuseipdb.com/check/${ip}" target="_blank">AbuseIPDB</a>
-      <a href="https://www.virustotal.com/gui/ip-address/${ip}" target="_blank">VirusTotal</a>
-      <a href="https://viz.greynoise.io/ip/${ip}" target="_blank">GreyNoise</a>
-      <a href="https://www.shodan.io/host/${ip}" target="_blank">Shodan</a>
-      <a href="https://search.censys.io/hosts/${ip}" target="_blank">Censys</a>
-      <a href="https://otx.alienvault.com/indicator/ip/${ip}" target="_blank">AlienVault OTX</a>
-      <a href="https://ipinfo.io/${ip}" target="_blank">IPinfo</a>
-      <a href="https://talosintelligence.com/reputation_center/lookup?search=${ip}" target="_blank">Cisco Talos</a>
-    </div>
-  </div>` : "";
+function parseMimePart(rawPart, out = []) {
+  const { headerText, bodyText } = splitHeadersBody(rawPart);
+  const headers = parseHeaders(headerText);
+  const contentType = headers["content-type"] || "text/plain";
+  const disposition = headers["content-disposition"] || "";
+  const transferEncoding = headers["content-transfer-encoding"] || "";
+  const boundary = getBoundary(contentType);
+  const filename = getFilename(headers);
 
-  result.innerHTML=`
-  <div class="card">
-    <h2>Verdict</h2>
-    Score: <b>${score}/100</b><br>
-    Risk:
-    <span class="${level}" style="border:1px solid currentColor;padding:2px 8px;border-radius:4px;">
-      ${level}
-    </span>
-    <ul>${reasons.map(r=>`<li>${r}</li>`).join("")}</ul>
-  </div>
+  if (/multipart\//i.test(contentType) && boundary) {
+    const parts = splitMultipartBody(bodyText, boundary);
+    for (const part of parts) parseMimePart(part, out);
+    return out;
+  }
 
-  <div class="card">
-    <h2>Brand Detection</h2>
-    ${brands.length?`Detected: <b>${brands.join(", ")}</b>`:"No brand indicators detected"}
-    <p style="font-size:0.9em;color:gray;">
-      Brand detection is based on identity fields and does not guarantee affiliation.
-    </p>
-  </div>
+  const isAttachment = /attachment/i.test(disposition) || !!filename;
 
-  ${ti}
-  ${renderOtherHeaders(h)}
+  if (isAttachment) {
+    const bytes = decodeBodyByEncoding(bodyText, transferEncoding);
+    out.push({
+      filename: filename || "unnamed_attachment",
+      mimeType: contentType.split(";")[0].trim(),
+      disposition,
+      transferEncoding,
+      size: bytes.length,
+      bytes
+    });
+  }
+
+  return out;
+}
+
+function extractAttachmentsFromEml(rawEml) {
+  return parseMimePart(rawEml, []);
+}
+
+async function sha256Hex(bytes) {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+  );
+  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+function getAttachmentRisk(filename = "", mimeType = "", size = 0) {
+  const ext = getExt(filename);
+  const doubleExt = getDoubleExtension(filename);
+  let score = 0;
+  const reasons = [];
+
+  if (!filename) {
+    score += 10;
+    reasons.push("Missing filename");
+  }
+
+  if (SUSPICIOUS_EXTENSIONS.has(ext)) {
+    score += 45;
+    reasons.push(`Suspicious extension: .${ext}`);
+  }
+
+  if (doubleExt) {
+    const [first, second] = doubleExt.split(".");
+    if (SAFEISH_EXTENSIONS.has(first) && SUSPICIOUS_EXTENSIONS.has(second)) {
+      score += 35;
+      reasons.push(`Double extension pattern: .${doubleExt}`);
+    }
+  }
+
+  const mime = (mimeType || "").toLowerCase();
+  if ([
+    "application/x-msdownload",
+    "application/javascript",
+    "text/javascript",
+    "application/x-dosexec",
+    "application/hta"
+  ].includes(mime)) {
+    score += 35;
+    reasons.push(`Suspicious MIME type: ${mimeType}`);
+  }
+
+  if (ARCHIVE_EXTENSIONS.has(ext)) {
+    score += 12;
+    reasons.push("Archive attachment");
+  }
+
+  if (size === 0) {
+    score += 10;
+    reasons.push("Zero-byte attachment");
+  }
+
+  const level = score >= 60 ? "HIGH" : score >= 25 ? "MEDIUM" : "LOW";
+  return { score, level, reasons };
+}
+
+function findAllSignatures(bytes, sig) {
+  const found = [];
+  for (let i = 0; i <= bytes.length - sig.length; i++) {
+    let ok = true;
+    for (let j = 0; j < sig.length; j++) {
+      if (bytes[i + j] !== sig[j]) { ok = false; break; }
+    }
+    if (ok) found.push(i);
+  }
+  return found;
+}
+
+function readLE16(bytes, offset) {
+  return bytes[offset] | (bytes[offset + 1] << 8);
+}
+
+function readLE32(bytes, offset) {
+  return (
+    bytes[offset] |
+    (bytes[offset + 1] << 8) |
+    (bytes[offset + 2] << 16) |
+    (bytes[offset + 3] << 24)
+  ) >>> 0;
+}
+
+function decodeZipName(nameBytes) {
+  try {
+    return new TextDecoder("utf-8", { fatal: false }).decode(nameBytes);
+  } catch {
+    return Array.from(nameBytes).map(b => String.fromCharCode(b)).join("");
+  }
+}
+
+function inspectZipBytes(bytes, depth = 0, maxDepth = 2) {
+  const results = {
+    format: "zip",
+    encrypted: false,
+    entries: [],
+    nestedFindings: []
+  };
+
+  const sig = Uint8Array.from([0x50, 0x4b, 0x01, 0x02]);
+  const positions = findAllSignatures(bytes, sig);
+
+  for (const pos of positions) {
+    if (pos + 46 > bytes.length) continue;
+
+    const flags = readLE16(bytes, pos + 8);
+    const compressedSize = readLE32(bytes, pos + 20);
+    const uncompressedSize = readLE32(bytes, pos + 24);
+    const nameLen = readLE16(bytes, pos + 28);
+    const extraLen = readLE16(bytes, pos + 30);
+    const commentLen = readLE16(bytes, pos + 32);
+    const localHeaderOffset = readLE32(bytes, pos + 42);
+
+    if (pos + 46 + nameLen > bytes.length) continue;
+
+    const nameBytes = bytes.slice(pos + 46, pos + 46 + nameLen);
+    const name = decodeZipName(nameBytes);
+    const ext = getExt(name);
+
+    const entry = {
+      name,
+      ext,
+      compressedSize,
+      uncompressedSize,
+      encrypted: !!(flags & 0x0001),
+      reasons: []
+    };
+
+    if (entry.encrypted) {
+      results.encrypted = true;
+      entry.reasons.push("Encrypted ZIP entry");
+    }
+
+    if (SUSPICIOUS_EXTENSIONS.has(ext)) {
+      entry.reasons.push(`Suspicious file inside ZIP: .${ext}`);
+    }
+
+    const doubleExt = getDoubleExtension(name);
+    if (doubleExt) {
+      const [first, second] = doubleExt.split(".");
+      if (SAFEISH_EXTENSIONS.has(first) && SUSPICIOUS_EXTENSIONS.has(second)) {
+        entry.reasons.push(`Double extension inside ZIP: .${doubleExt}`);
+      }
+    }
+
+    results.entries.push(entry);
+
+    if (depth < maxDepth && ext === "zip") {
+      const nested = extractZipEntryBytes(bytes, localHeaderOffset);
+      if (nested && nested.length) {
+        try {
+          const nestedResult = inspectZipBytes(nested, depth + 1, maxDepth);
+          results.nestedFindings.push({
+            parent: name,
+            result: nestedResult
+          });
+        } catch {}
+      }
+    }
+
+    pos += 46 + nameLen + extraLen + commentLen;
+  }
+
+  return results;
+}
+
+function extractZipEntryBytes(zipBytes, localHeaderOffset) {
+  if (localHeaderOffset + 30 > zipBytes.length) return null;
+  const sig0 = zipBytes[localHeaderOffset];
+  const sig1 = zipBytes[localHeaderOffset + 1];
+  const sig2 = zipBytes[localHeaderOffset + 2];
+  const sig3 = zipBytes[localHeaderOffset + 3];
+  if (!(sig0 === 0x50 && sig1 === 0x4b && sig2 === 0x03 && sig3 === 0x04)) return null;
+
+  const compressionMethod = readLE16(zipBytes, localHeaderOffset + 8);
+  const compressedSize = readLE32(zipBytes, localHeaderOffset + 18);
+  const nameLen = readLE16(zipBytes, localHeaderOffset + 26);
+  const extraLen = readLE16(zipBytes, localHeaderOffset + 28);
+  const dataStart = localHeaderOffset + 30 + nameLen + extraLen;
+  const dataEnd = dataStart + compressedSize;
+
+  if (dataEnd > zipBytes.length) return null;
+  if (compressionMethod !== 0) return null;
+  return zipBytes.slice(dataStart, dataEnd);
+}
+
+function flattenZipFindings(zipResult, findings = []) {
+  if (!zipResult) return findings;
+  for (const entry of zipResult.entries || []) findings.push(entry);
+  for (const nested of zipResult.nestedFindings || []) flattenZipFindings(nested.result, findings);
+  return findings;
+}
+
+function attachmentRiskFromZipInspection(zipResult) {
+  let extraScore = 0;
+  const extraReasons = [];
+
+  if (!zipResult) return { extraScore, extraReasons };
+
+  if (zipResult.encrypted) {
+    extraScore += 30;
+    extraReasons.push("Password-protected or encrypted ZIP content detected");
+  }
+
+  const findings = flattenZipFindings(zipResult);
+  for (const f of findings) {
+    if ((f.reasons || []).some(r => r.includes("Suspicious file inside ZIP"))) {
+      extraScore += 25;
+      extraReasons.push(`Suspicious file found inside archive: ${f.name}`);
+    }
+    if ((f.reasons || []).some(r => r.includes("Double extension inside ZIP"))) {
+      extraScore += 20;
+      extraReasons.push(`Double extension found inside archive: ${f.name}`);
+    }
+    if ((f.reasons || []).some(r => r.includes("Encrypted ZIP entry"))) {
+      extraScore += 15;
+    }
+  }
+
+  return { extraScore, extraReasons };
+}
+
+async function enrichAttachments(attachments) {
+  const enriched = [];
+
+  for (const att of attachments) {
+    const baseRisk = getAttachmentRisk(att.filename, att.mimeType, att.size);
+    const hash = await sha256Hex(att.bytes);
+
+    let zipInspection = null;
+    const ext = getExt(att.filename);
+    if (ext === "zip") {
+      try {
+        zipInspection = inspectZipBytes(att.bytes);
+      } catch {}
+    }
+
+    const zipRisk = attachmentRiskFromZipInspection(zipInspection);
+    const totalScore = baseRisk.score + zipRisk.extraScore;
+    const totalLevel = totalScore >= 60 ? "HIGH" : totalScore >= 25 ? "MEDIUM" : "LOW";
+
+    enriched.push({
+      ...att,
+      sha256: hash,
+      vtUrl: `https://www.virustotal.com/gui/file/${hash}`,
+      zipInspection,
+      risk: {
+        score: totalScore,
+        level: totalLevel,
+        reasons: [...baseRisk.reasons, ...zipRisk.extraReasons]
+      }
+    });
+  }
+
+  return enriched;
+}
+
+function renderZipInspection(zipInspection) {
+  if (!zipInspection) return "";
+
+  const rows = (zipInspection.entries || []).map(entry => `
+    <tr>
+      <td>${escapeHtml(entry.name)}</td>
+      <td>${escapeHtml(entry.ext || "-")}</td>
+      <td>${formatBytes(entry.uncompressedSize || 0)}</td>
+      <td>${entry.encrypted ? "Yes" : "No"}</td>
+      <td>${escapeHtml((entry.reasons || []).join("; ") || "No obvious issues")}</td>
+    </tr>
+  `).join("");
+
+  return `
+    <details style="margin-top:10px;">
+      <summary>Archive inspection</summary>
+      <table style="margin-top:10px;">
+        <thead>
+          <tr>
+            <th>Entry</th>
+            <th>Ext</th>
+            <th>Size</th>
+            <th>Encrypted</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>${rows || `<tr><td colspan="5">No ZIP entries parsed</td></tr>`}</tbody>
+      </table>
+    </details>
   `;
+}
 
-  result.scrollIntoView({behavior:"smooth"});
-  btn.textContent="Analyze";
-  btn.disabled=false;
+function renderAttachmentResults(attachments) {
+  if (!attachments.length) {
+    return `
+      <div class="card">
+        <h2>Attachments</h2>
+        <p>No attachments found in the uploaded .eml.</p>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="card">
+      <h2>Attachments</h2>
+      <p class="small">Hashes are computed locally. Downloads are saved as password-protected ZIP files using password: <code>infected</code>.</p>
+      ${attachments.map((att, i) => `
+        <div class="attachment-card">
+          <div class="row">
+            <strong>${escapeHtml(att.filename)}</strong>
+            <span class="${att.risk.level} badge">${att.risk.level}</span>
+            <span class="kv">Score: ${att.risk.score}/100</span>
+          </div>
+
+          <div style="margin-top:8px;" class="kv">
+            MIME: <code>${escapeHtml(att.mimeType || "unknown")}</code><br>
+            Size: ${formatBytes(att.size)}<br>
+            SHA-256: <span class="hash">${escapeHtml(att.sha256)}</span>
+          </div>
+
+          <div style="margin-top:10px;" class="row">
+            <button onclick="downloadProtectedAttachment(${i})">Download (ZIP - password: infected)</button>
+            <a href="${att.vtUrl}" target="_blank" rel="noopener">Open hash in VirusTotal</a>
+          </div>
+
+          <ul class="reason-list">
+            ${(att.risk.reasons.length
+              ? att.risk.reasons
+              : ["No obvious risky traits detected"]).map(r => `<li>${escapeHtml(r)}</li>`).join("")}
+          </ul>
+
+          ${renderZipInspection(att.zipInspection)}
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+async function downloadProtectedZip(att) {
+  const password = "infected";
+
+  const zipWriter = new zip.ZipWriter(
+    new zip.BlobWriter("application/zip"),
+    {
+      password,
+      encryptionStrength: 3
+    }
+  );
+
+  await zipWriter.add(att.filename, new zip.Uint8ArrayReader(att.bytes));
+
+  const blob = await zipWriter.close();
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${att.filename}.zip`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function downloadProtectedAttachment(i) {
+  const att = currentAttachmentCache[i];
+  if (att) downloadProtectedZip(att);
+}
+
+async function analyze(btn, rawEmlOverride = "") {
+  if(btn){
+    btn.disabled = true;
+    btn.textContent = "Analyzing…";
+  }
+
+  try {
+    const raw = document.getElementById("headers").value.trim();
+    if (!raw) {
+      if (btn) {
+        btn.textContent = "Analyze";
+        btn.disabled = false;
+      }
+      return;
+    }
+
+    const h = parseHeaders(raw);
+    const rec = h["received"] || "";
+    const ip = (rec.match(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g) || []).pop();
+
+    const identity = [h.from, h["reply-to"], h["return-path"], h.subject].join(" ").toLowerCase();
+    const brands = Object.keys(BRANDS).filter(b => BRANDS[b].some(k => identity.includes(k)));
+
+    let score = 0, reasons = [];
+    if (brands.length) {
+      score += 25;
+      reasons.push("Brand impersonation indicators detected");
+    }
+
+    if (/urgent|verify|password|login|account|suspend/i.test(h.subject || "")) {
+      score += 15;
+      reasons.push("Urgent or security-related language detected");
+    }
+
+    const level = score >= 75 ? "HIGH" : score >= 45 ? "MEDIUM" : "LOW";
+
+    const ti = ip ? `
+      <div class="card">
+        <h2>Threat Intelligence (Sender IP)</h2>
+        <div class="grid">
+          <a href="https://www.abuseipdb.com/check/${ip}" target="_blank" rel="noopener">AbuseIPDB</a>
+          <a href="https://www.virustotal.com/gui/ip-address/${ip}" target="_blank" rel="noopener">VirusTotal</a>
+          <a href="https://viz.greynoise.io/ip/${ip}" target="_blank" rel="noopener">GreyNoise</a>
+          <a href="https://www.shodan.io/host/${ip}" target="_blank" rel="noopener">Shodan</a>
+          <a href="https://search.censys.io/hosts/${ip}" target="_blank" rel="noopener">Censys</a>
+          <a href="https://otx.alienvault.com/indicator/ip/${ip}" target="_blank" rel="noopener">AlienVault OTX</a>
+          <a href="https://ipinfo.io/${ip}" target="_blank" rel="noopener">IPinfo</a>
+          <a href="https://talosintelligence.com/reputation_center/lookup?search=${ip}" target="_blank" rel="noopener">Cisco Talos</a>
+        </div>
+      </div>
+    ` : "";
+
+    let attachmentHtml = "";
+    if (rawEmlOverride) {
+      const extracted = extractAttachmentsFromEml(rawEmlOverride);
+      currentAttachmentCache = await enrichAttachments(extracted);
+      attachmentHtml = renderAttachmentResults(currentAttachmentCache);
+    } else {
+      currentAttachmentCache = [];
+    }
+
+    document.getElementById("result").innerHTML = `
+      <div class="card">
+        <h2>Verdict</h2>
+        Score: <b>${score}/100</b><br>
+        Risk:
+        <span class="${level} badge">${level}</span>
+        <ul>${reasons.map(r => `<li>${escapeHtml(r)}</li>`).join("") || "<li>No strong phishing indicators detected from headers alone</li>"}</ul>
+      </div>
+
+      <div class="card">
+        <h2>Brand Detection</h2>
+        ${brands.length ? `Detected: <b>${escapeHtml(brands.join(", "))}</b>` : "No brand indicators detected"}
+        <p class="small">
+          Brand detection is based on identity fields and does not guarantee affiliation.
+        </p>
+      </div>
+
+      ${ti}
+      ${attachmentHtml}
+      ${renderOtherHeaders(h)}
+    `;
+
+    document.getElementById("result").scrollIntoView({behavior:"smooth"});
+  } finally {
+    if(btn){
+      btn.textContent = "Analyze";
+      btn.disabled = false;
+    }
+  }
 }
 </script>
 
