@@ -175,19 +175,7 @@ PhishLens is intended for:
 
 Always handle suspicious files in a controlled environment.
 
-------------------------------------------------------------
 
-FUTURE IDEAS
 
-- .msg support
-- better archive recursion
-- download all attachments in one ZIP
-- IOC export
-- URL extraction from email body
-- richer UI explainability
 
-------------------------------------------------------------
 
-LICENSE
-
-MIT
