@@ -514,23 +514,19 @@ async function sha256Hex(bytes) {
 function getAttachmentRisk(filename = "", mimeType = "", size = 0) {
   const ext = getExt(filename);
   const doubleExt = getDoubleExtension(filename);
-  let score = 0;
   const reasons = [];
 
   if (!filename) {
-    score += 10;
     reasons.push("Missing filename");
   }
 
   if (SUSPICIOUS_EXTENSIONS.has(ext)) {
-    score += 45;
     reasons.push(`Suspicious extension: .${ext}`);
   }
 
   if (doubleExt) {
     const [first, second] = doubleExt.split(".");
     if (SAFEISH_EXTENSIONS.has(first) && SUSPICIOUS_EXTENSIONS.has(second)) {
-      score += 35;
       reasons.push(`Double extension pattern: .${doubleExt}`);
     }
   }
@@ -543,22 +539,18 @@ function getAttachmentRisk(filename = "", mimeType = "", size = 0) {
     "application/x-dosexec",
     "application/hta"
   ].includes(mime)) {
-    score += 35;
     reasons.push(`Suspicious MIME type: ${mimeType}`);
   }
 
   if (ARCHIVE_EXTENSIONS.has(ext)) {
-    score += 12;
     reasons.push("Archive attachment");
   }
 
   if (size === 0) {
-    score += 10;
     reasons.push("Zero-byte attachment");
   }
 
-  const level = score >= 60 ? "HIGH" : score >= 25 ? "MEDIUM" : "LOW";
-  return { score, level, reasons };
+  return { reasons };
 }
 
 function findAllSignatures(bytes, sig) {
@@ -697,32 +689,25 @@ function flattenZipFindings(zipResult, findings = []) {
 }
 
 function attachmentRiskFromZipInspection(zipResult) {
-  let extraScore = 0;
   const extraReasons = [];
 
-  if (!zipResult) return { extraScore, extraReasons };
+  if (!zipResult) return { extraReasons };
 
   if (zipResult.encrypted) {
-    extraScore += 30;
     extraReasons.push("Password-protected or encrypted ZIP content detected");
   }
 
   const findings = flattenZipFindings(zipResult);
   for (const f of findings) {
     if ((f.reasons || []).some(r => r.includes("Suspicious file inside ZIP"))) {
-      extraScore += 25;
       extraReasons.push(`Suspicious file found inside archive: ${f.name}`);
     }
     if ((f.reasons || []).some(r => r.includes("Double extension inside ZIP"))) {
-      extraScore += 20;
       extraReasons.push(`Double extension found inside archive: ${f.name}`);
-    }
-    if ((f.reasons || []).some(r => r.includes("Encrypted ZIP entry"))) {
-      extraScore += 15;
     }
   }
 
-  return { extraScore, extraReasons };
+  return { extraReasons };
 }
 
 async function enrichAttachments(attachments) {
@@ -741,8 +726,6 @@ async function enrichAttachments(attachments) {
     }
 
     const zipRisk = attachmentRiskFromZipInspection(zipInspection);
-    const totalScore = baseRisk.score + zipRisk.extraScore;
-    const totalLevel = totalScore >= 60 ? "HIGH" : totalScore >= 25 ? "MEDIUM" : "LOW";
 
     enriched.push({
       ...att,
@@ -750,8 +733,6 @@ async function enrichAttachments(attachments) {
       vtUrl: `https://www.virustotal.com/gui/file/${hash}`,
       zipInspection,
       risk: {
-        score: totalScore,
-        level: totalLevel,
         reasons: [...baseRisk.reasons, ...zipRisk.extraReasons]
       }
     });
@@ -806,12 +787,17 @@ function renderAttachmentResults(attachments) {
     <div class="card">
       <h2>Attachments</h2>
       <p class="small">Hashes are computed locally. Downloads are saved as password-protected ZIP files using password: <code>infected</code>.</p>
+      <p class="small">IOC export is available only for attachments extracted from uploaded <code>.eml</code> files.</p>
+
+      <div class="row" style="margin-top:10px;">
+        <button onclick="exportAttachmentIocsJson()">Export IOCs (JSON)</button>
+        <button onclick="exportAttachmentIocsCsv()">Export IOCs (CSV)</button>
+      </div>
+
       ${attachments.map((att, i) => `
         <div class="attachment-card">
           <div class="row">
             <strong>${escapeHtml(att.filename)}</strong>
-            <span class="${att.risk.level} badge">${att.risk.level}</span>
-            <span class="kv">Score: ${att.risk.score}/100</span>
           </div>
 
           <div style="margin-top:8px;" class="kv">
@@ -825,11 +811,11 @@ function renderAttachmentResults(attachments) {
             <a href="${att.vtUrl}" target="_blank" rel="noopener">Open hash in VirusTotal</a>
           </div>
 
-          <ul class="reason-list">
-            ${(att.risk.reasons.length
-              ? att.risk.reasons
-              : ["No obvious risky traits detected"]).map(r => `<li>${escapeHtml(r)}</li>`).join("")}
-          </ul>
+          ${att.risk.reasons.length ? `
+            <ul class="reason-list">
+              ${att.risk.reasons.map(r => `<li>${escapeHtml(r)}</li>`).join("")}
+            </ul>
+          ` : ""}
 
           ${renderZipInspection(att.zipInspection)}
         </div>
@@ -867,6 +853,107 @@ async function downloadProtectedZip(att) {
 function downloadProtectedAttachment(i) {
   const att = currentAttachmentCache[i];
   if (att) downloadProtectedZip(att);
+}
+
+function buildAttachmentIocRecords() {
+  if (!currentAttachmentCache || !currentAttachmentCache.length) return [];
+
+  return currentAttachmentCache.map(att => ({
+    type: "attachment",
+    source: "uploaded_eml",
+    filename: att.filename || "",
+    mime_type: att.mimeType || "",
+    size_bytes: att.size || 0,
+    sha256: att.sha256 || "",
+    risk_reasons: att.risk?.reasons || [],
+    virustotal_url: att.vtUrl || "",
+    extracted_at: new Date().toISOString()
+  }));
+}
+
+function downloadTextFile(filename, content, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function exportAttachmentIocsJson() {
+  const records = buildAttachmentIocRecords();
+
+  if (!records.length) {
+    alert("No attachment IOCs available. Upload a full .eml file first.");
+    return;
+  }
+
+  const payload = {
+    tool: "PhishLens",
+    export_type: "attachment_iocs",
+    note: "Attachment IOC export only works when a full .eml file is uploaded. Header-only analysis does not include attachment IOCs.",
+    generated_at: new Date().toISOString(),
+    count: records.length,
+    records
+  };
+
+  downloadTextFile(
+    `phishlens_iocs_${new Date().toISOString().replace(/[:.]/g, "-")}.json`,
+    JSON.stringify(payload, null, 2),
+    "application/json"
+  );
+}
+
+function csvEscape(value) {
+  const str = Array.isArray(value) ? value.join(" | ") : String(value ?? "");
+  return `"${str.replace(/"/g, '""')}"`;
+}
+
+function exportAttachmentIocsCsv() {
+  const records = buildAttachmentIocRecords();
+
+  if (!records.length) {
+    alert("No attachment IOCs available. Upload a full .eml file first.");
+    return;
+  }
+
+  const headers = [
+    "type",
+    "source",
+    "filename",
+    "mime_type",
+    "size_bytes",
+    "sha256",
+    "risk_reasons",
+    "virustotal_url",
+    "extracted_at"
+  ];
+
+  const rows = [
+    headers.join(","),
+    ...records.map(r => [
+      csvEscape(r.type),
+      csvEscape(r.source),
+      csvEscape(r.filename),
+      csvEscape(r.mime_type),
+      csvEscape(r.size_bytes),
+      csvEscape(r.sha256),
+      csvEscape(r.risk_reasons),
+      csvEscape(r.virustotal_url),
+      csvEscape(r.extracted_at)
+    ].join(","))
+  ];
+
+  downloadTextFile(
+    `phishlens_iocs_${new Date().toISOString().replace(/[:.]/g, "-")}.csv`,
+    rows.join("\n"),
+    "text/csv;charset=utf-8"
+  );
 }
 
 async function analyze(btn, rawEmlOverride = "") {
@@ -964,4 +1051,3 @@ async function analyze(btn, rawEmlOverride = "") {
 
 </body>
 </html>
- 
