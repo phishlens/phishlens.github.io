@@ -164,17 +164,6 @@ TECH STACK
 
 ------------------------------------------------------------
 
-DEPLOYMENT
-
-PhishLens is fully static and can be hosted on:
-
-- GitHub Pages
-- Netlify
-- Vercel
-- Any static hosting
-
-------------------------------------------------------------
-
 DISCLAIMER
 
 PhishLens is intended for:
