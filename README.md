@@ -8,113 +8,197 @@
   <img src="https://img.shields.io/badge/type-client--side%20only-lightgrey">
 </p>
 
-# PhishLens
+PhishLens
 
+PhishLens is a lightweight, browser-based phishing analysis tool for inspecting email headers and .eml files locally.
 
-PhishLens is a lightweight, browser-based email header analysis tool built to help security analysts, blue teams, and researchers quickly triage potential phishing emails.
+It helps analysts quickly review phishing indicators, investigate sender infrastructure, extract attachments, inspect archives, and safely download suspicious samples without relying on a backend.
 
-The tool runs entirely in the browser. No email data is sent to a server, no APIs are required, and no tracking is performed.
+------------------------------------------------------------
 
-Live site:  
-https://phishlens.github.io
+FEATURES
 
----
+- Analyze raw email headers
+- Upload and inspect .eml files locally
+- Detect basic phishing indicators
+- Brand impersonation hints
+- Threat intelligence links for sender IPs
+- Expand and review additional headers
 
-## Overview
+ATTACHMENT FEATURES
 
-PhishLens focuses on fast and practical phishing analysis using email headers and `.eml` files.  
-It highlights common indicators such as brand impersonation, suspicious subject language, and sender infrastructure, and provides direct links to well-known public threat intelligence platforms for manual investigation.
+- Extract attachments from uploaded .eml files
+- Compute SHA-256 hashes for attachments
+- Open attachment hashes in VirusTotal
+- Detect suspicious file extensions
+- Detect double extensions (e.g. invoice.pdf.exe)
+- Inspect ZIP archives for risky contents
+- Detect encrypted or password-protected ZIP files
+- Download attachments as password-protected ZIP files
 
-PhishLens is designed as a **decision-support tool**, not an automated detection engine.
+------------------------------------------------------------
 
----
+IMPORTANT NOTE
 
-## Features
+Attachment extraction ONLY works when uploading a full .eml file.
 
-- Paste raw email headers for analysis  
-- Upload `.eml` files directly in the browser  
-- Heuristic phishing risk scoring with explanations  
-- Detection of common brand impersonation patterns  
-- Extraction of sender IP from Received headers  
-- Direct pivots to public threat intelligence platforms:
-  - AbuseIPDB  
-  - VirusTotal  
-  - GreyNoise  
-  - Shodan  
-  - Censys  
-  - AlienVault OTX  
-  - IPinfo  
-  - Cisco Talos  
-- Optional dark mode  
-- Fully client-side implementation (no backend)
+- Pasting headers alone will NOT extract attachments
+- Hash-only analysis does NOT extract attachments
+- The MIME structure of the .eml file is required
 
----
+------------------------------------------------------------
 
-## How It Works
+ATTACHMENT ANALYSIS
 
-All parsing and analysis is performed locally using JavaScript:
+For each attachment, PhishLens shows:
 
-- Email headers are parsed in the browser  
-- The Received chain is inspected to extract sender IPs  
-- Simple heuristics are applied to identify common phishing indicators  
-- No external services are contacted automatically  
+- File name
+- MIME type
+- File size
+- SHA-256 hash
+- Risk level
+- Risk reasons
+- VirusTotal lookup link
 
-This makes PhishLens safe to use with sensitive or internal email data.
+------------------------------------------------------------
 
----
+ATTACHMENT RISK CHECKS
 
-## Usage
+PhishLens flags:
 
-1. Open the live site at https://phishlens.github.io  
-2. Paste raw email headers or upload a `.eml` file  
-3. Click the Analyze button  
-4. Review the risk score, indicators, and investigation links  
+- Suspicious extensions:
+  .exe, .js, .vbs, .bat, .cmd, .ps1, .hta, .iso, .img, .lnk
 
-PhishLens is optimized for rapid triage rather than deep forensic reconstruction.
+- Archive formats:
+  .zip, .rar, .7z
 
----
+- Double extensions:
+  invoice.pdf.exe
 
-## Limitations
+- Suspicious MIME types
+- Empty (0-byte) files
 
-- The analysis is heuristic-based and not exhaustive  
-- Not all phishing emails will be detected  
-- Results should not be used as the sole basis for security decisions  
+------------------------------------------------------------
 
-PhishLens works best when combined with additional context such as SIEM alerts, user reports, sandboxing, and endpoint telemetry.
+ARCHIVE INSPECTION
 
-## Technology
+For ZIP attachments:
 
-- HTML, CSS, JavaScript  
-- GitHub Pages for hosting  
-- No frameworks  
-- No backend services  
+- Lists files inside the archive
+- Detects suspicious files inside ZIP
+- Detects double extensions inside ZIP
+- Flags encrypted entries
+- Detects password-protected archives
+- Performs limited nested ZIP inspection
 
----
+------------------------------------------------------------
 
-## License
+SAFE DOWNLOAD
 
-MIT License.
+Attachments are NOT downloaded raw.
 
-This project is provided as-is for research, learning, and defensive security purposes.
+They are automatically:
 
----
+- Packaged into a ZIP file
+- Protected with password:
 
-## Contributing
+  infected
 
-Suggestions and improvements are welcome.
+This follows standard malware analysis practice and helps prevent accidental execution.
 
-Potential areas for enhancement include:
-- Improved look-alike and homoglyph domain detection  
-- Better visualization of the Received header chain  
-- Export functionality (PDF or JSON)  
-- Expanded brand impersonation profiles  
-- UI and usability refinements  
+------------------------------------------------------------
 
-Issues and pull requests are encouraged.
+PRIVACY
 
----
+All analysis is performed locally in your browser.
 
-## Project Status
+- No headers are uploaded
+- No attachments are uploaded
+- No backend is used
+- No APIs are required
 
-The project is stable and publicly available.  
-It is actively usable and open for future improvements.
+Threat intelligence links are manual only.
+
+------------------------------------------------------------
+
+HOW TO USE
+
+OPTION 1: HEADERS
+
+1. Paste raw email headers
+2. Click "Analyze"
+
+OPTION 2: .EML FILE
+
+1. Upload a .eml file
+2. PhishLens will:
+   - analyze headers
+   - extract attachments
+   - calculate hashes
+   - inspect archives
+   - provide safe downloads
+
+------------------------------------------------------------
+
+THREAT INTELLIGENCE LINKS
+
+If an IP is found, links are provided for:
+
+- AbuseIPDB
+- VirusTotal
+- GreyNoise
+- Shodan
+- Censys
+- AlienVault OTX
+- IPinfo
+- Cisco Talos
+
+------------------------------------------------------------
+
+TECH STACK
+
+- HTML
+- CSS
+- JavaScript
+- zip.js (for password-protected ZIP downloads)
+
+------------------------------------------------------------
+
+DEPLOYMENT
+
+PhishLens is fully static and can be hosted on:
+
+- GitHub Pages
+- Netlify
+- Vercel
+- Any static hosting
+
+------------------------------------------------------------
+
+DISCLAIMER
+
+PhishLens is intended for:
+
+- phishing analysis
+- email forensics
+- incident response
+- defensive security research
+
+Always handle suspicious files in a controlled environment.
+
+------------------------------------------------------------
+
+FUTURE IDEAS
+
+- .msg support
+- better archive recursion
+- download all attachments in one ZIP
+- IOC export
+- URL extraction from email body
+- richer UI explainability
+
+------------------------------------------------------------
+
+LICENSE
+
+MIT
